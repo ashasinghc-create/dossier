@@ -63,7 +63,12 @@ export default async function SettingsPage({ searchParams }: PageProps<"/setting
             maxScores: settings.agentMaxScores,
             maxDrafts: settings.agentMaxDrafts,
             autoDraft: settings.agentAutoDraft,
+            autoApply: settings.autoApplyEnabled,
+            autoApplyMinScore: settings.autoApplyMinScore,
+            autoApplyDailyCap: settings.autoApplyDailyCap,
           }}
+          autoApplyLog={settings.autoApplyLog}
+          strict={settings.strict}
           source={(await loadJobSearchConfig()).source}
           aiReady={await isAiConfigured()}
           countries={COUNTRIES}

@@ -58,6 +58,8 @@ export const INSTALL_SETTINGS: readonly string[] = [
   "usagePingChoiceText",
   // The job agent's runs count against this server's job source key (E16).
   "agentRuns",
+  // What auto-apply sent from this server's Gmail connection (this fork).
+  "autoApplyLog",
   // When Startups was last opened and what its last refresh found (#222).
   "startupsViewedAt",
   "startupsLastRefresh",

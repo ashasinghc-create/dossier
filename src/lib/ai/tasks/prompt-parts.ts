@@ -124,7 +124,7 @@ export const UNTRUSTED_POSTING =
 /** SET-4. Strict mode forbids anything the profile doesn't back. */
 export function truthfulness(strict: boolean): string {
   return strict
-    ? "Use only facts that are in the candidate's profile or that they tell you. Never invent or embellish an employer, job title, date, duration, number, percentage, metric, skill, tool, degree, certificate or award, and never claim experience the profile doesn't show. You may choose, reorder, shorten, rephrase and emphasise what's there. When the job asks for something the profile doesn't have, leave it out rather than stretch the truth."
+    ? "Use only facts that are in the candidate's profile or that they tell you. Never invent or embellish an employer, job title, date, duration, number, percentage, metric, skill, tool, degree, certificate or award, and never claim experience the profile doesn't show. You may choose, reorder, shorten, rephrase and emphasise what's there. When the job asks for something the profile doesn't have, leave it out rather than stretch the truth. In particular: never take a skill, tool, language, industry or number of years from the job posting and attribute it to the candidate; never raise how well they know something (familiar is not expert, used is not led); never add team sizes, results or responsibilities the profile doesn't state; and never imply they have done something by wording it vaguely. If in doubt, leave it out."
     : "Stay truthful to the candidate's profile and what they tell you. You may draw reasonable conclusions from it, but never invent employers, job titles, dates or credentials.";
 }
 

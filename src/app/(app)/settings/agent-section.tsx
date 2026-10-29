@@ -11,6 +11,7 @@ import { Toggle } from "@/components/ui/toggle";
 import { useAutosave } from "@/hooks/use-autosave";
 import type { Country } from "@/lib/job-search/countries";
 import { searchHref, type JobSource, type SearchQuery } from "@/lib/job-search/search";
+import type { AutoApplyEntry } from "@/lib/settings";
 
 import { saveAgentSettings } from "../agent/actions";
 import { RemoteOnlyField, SearchFields, type SearchFieldErrors } from "../jobs/search-fields";
@@ -24,12 +25,17 @@ export type AgentSettings = {
   maxScores: number;
   maxDrafts: number;
   autoDraft: boolean;
+  /** Auto-apply (this fork): send the drafts that pass the honesty check. */
+  autoApply: boolean;
+  autoApplyMinScore: number;
+  autoApplyDailyCap: number;
 };
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const MIN_SCORES = [50, 55, 60, 65, 70, 75, 80, 85, 90];
 const SCORE_COUNTS = Array.from({ length: 30 }, (_, index) => index + 1);
 const DRAFT_COUNTS = Array.from({ length: 11 }, (_, index) => index);
+const SEND_CAPS = Array.from({ length: 20 }, (_, index) => index + 1);
 const clock = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
@@ -44,8 +50,14 @@ export function AgentSection({
   aiReady,
   countries,
   timeZone,
+  autoApplyLog = [],
+  strict = true,
 }: {
   initial: AgentSettings;
+  /** What auto-apply sent or kept back, newest first. */
+  autoApplyLog?: readonly AutoApplyEntry[];
+  /** "Never invent experience": auto-apply only sends with it on. */
+  strict?: boolean;
   /** The source in Settings → Job search; null while job search is off. */
   source: JobSource | null;
   aiReady: boolean;
@@ -87,7 +99,7 @@ export function AgentSection({
   return (
     <>
       <SettingsSectionIntro title="Job agent">
-        Once a day it runs one search, scores the new postings against your profile, and keeps the best on the Agent screen. It never sends or applies.
+        Once a day it runs one search, scores the new postings against your profile, and keeps the best on the Agent screen. It sends nothing unless you turn on sending applications on their own, below.
       </SettingsSectionIntro>
 
       {source === "ARBEITSAGENTUR" ? (
@@ -190,14 +202,105 @@ export function AgentSection({
               : "Off. You choose which postings get a draft with Prepare draft."
           }
           checked={settings.autoDraft}
-          onCheckedChange={(autoDraft) => change({ autoDraft })}
+          onCheckedChange={(autoDraft) => change(autoDraft ? { autoDraft } : { autoDraft, autoApply: false })}
         />
       </Card>
+
+      <AutoApplyCard settings={settings} change={change} log={autoApplyLog} strict={strict} />
 
       <p className="text-meta text-muted">
         One search a day, and at most three in any 24 hours. Each run scores up to {plural(settings.maxScores, "posting", "postings")}
         {settings.autoDraft ? ` and prepares up to ${plural(settings.maxDrafts, "draft", "drafts")}` : ""}. Scoring and drafts go to your AI provider with your profile, as a new application does; the job source only gets the search.
       </p>
     </>
+  );
+}
+
+/**
+ * Auto-apply (this fork): send the agent's drafts from Gmail on their own,
+ * when the posting gives an address and nothing in them goes beyond the
+ * profile. Everything else waits on the Agent screen.
+ */
+function AutoApplyCard({
+  settings,
+  change,
+  log,
+  strict,
+}: {
+  settings: AgentSettings;
+  change: (next: Partial<AgentSettings>) => void;
+  log: readonly AutoApplyEntry[];
+  strict: boolean;
+}) {
+  return (
+    <Card padding="none" className="flex flex-col gap-5 px-7 py-[26px]">
+      <Toggle
+        label="Send applications on their own"
+        description={
+          settings.autoApply
+            ? `On. Drafts scored ${settings.autoApplyMinScore} or more are emailed from your Gmail with the resume and cover letter attached, up to ${plural(settings.autoApplyDailyCap, "application", "applications")} a day, when the posting gives an address and every claim is in your profile. The rest wait for you.`
+            : "Off. Drafts wait on the Agent screen for you to review and send."
+        }
+        checked={settings.autoApply}
+        onCheckedChange={(autoApply) => change(autoApply ? { autoApply, autoDraft: true } : { autoApply })}
+      />
+      {!strict && settings.autoApply && (
+        <p role="note" className="rounded-card bg-warning-surface px-4 py-3 text-meta text-warning">
+          Nothing is sent while &ldquo;Never invent experience&rdquo; is off in{" "}
+          <Link href="/settings?section=ai" className="font-medium text-warning underline underline-offset-2">
+            Settings → AI provider
+          </Link>
+          .
+        </p>
+      )}
+      <div className="grid gap-x-[18px] gap-y-5 sm:grid-cols-2">
+        <Select
+          label="Send only when scored at least"
+          value={String(settings.autoApplyMinScore)}
+          disabled={!settings.autoApply}
+          onChange={(event) => change({ autoApplyMinScore: Number(event.target.value) })}
+        >
+          {[...new Set([...MIN_SCORES, settings.autoApplyMinScore])].sort((a, b) => a - b).map((score) => (
+            <option key={score} value={score}>
+              {score} of 100
+            </option>
+          ))}
+        </Select>
+        <Select
+          label="Applications sent per day, at most"
+          value={String(settings.autoApplyDailyCap)}
+          disabled={!settings.autoApply}
+          onChange={(event) => change({ autoApplyDailyCap: Number(event.target.value) })}
+        >
+          {SEND_CAPS.map((count) => (
+            <option key={count} value={count}>
+              {count}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <p className="text-meta text-muted">
+        Before each send, the resume, cover letter and email are checked against your profile: a name, number, credential or skill the job asks for that your profile doesn&apos;t have keeps the application back for you. Jobs that take applications only on a website are never sent: they wait on the Agent screen.
+      </p>
+      {log.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-field font-medium">Latest</h3>
+          <ul className="flex flex-col gap-2">
+            {log.slice(0, 10).map((entry) => (
+              <li key={`${entry.applicationId}-${entry.at}`} className="text-meta">
+                <span className="font-medium">{entry.sent ? "Sent" : "Kept for you"}</span>
+                {": "}
+                <Link href={`/applications/${entry.applicationId}`} className="underline underline-offset-2">
+                  {[entry.title, entry.company].filter(Boolean).join(", ") || "Application"}
+                </Link>
+                {" · "}
+                {new Date(entry.at).toLocaleString()}
+                {entry.reasons.length > 0 && <span className="block text-muted">{entry.reasons.join(" ")}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Card>
   );
 }

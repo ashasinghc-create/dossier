@@ -26,7 +26,8 @@ import { agentDraftJob, draftJobKey } from "./draft";
 import { recordRunEnd, recordRunStart, runLimitProblem } from "./runs";
 
 // One run of the job agent (E16-3): one search, the postings seen before
-// dropped, and a score for the newest of the rest. It never sends anything.
+// dropped, and a score for the newest of the rest. It sends nothing itself;
+// with auto-apply on (this fork), its drafts may be sent once they're made.
 // Adapted from avinashbatchala's fork of Dossier.
 
 export const agentScanResultSchema = z.object({
@@ -166,7 +167,8 @@ export async function runAgentScan({ manual }: { manual: boolean }, context: Job
       take: settings.agentMaxDrafts,
       select: { id: true },
     });
-    for (const { id } of best) await startJob(agentDraftJob, { candidateId: id }, { key: draftJobKey(id) });
+    // With auto-apply on (this fork), each may then be sent on its own.
+    for (const { id } of best) await startJob(agentDraftJob, { candidateId: id, autoApply: settings.autoApplyEnabled }, { key: draftJobKey(id) });
     drafted = best.length;
   }
 

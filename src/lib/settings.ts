@@ -99,6 +99,20 @@ export type AgentRun = z.infer<typeof agentRunSchema>;
 /** How many runs are kept: more than a day's worth, for the limit and the screen. */
 export const AGENT_RUNS_KEPT = 10;
 
+/** One application auto-apply sent, or kept back for the user, and why. */
+export const autoApplyEntrySchema = z.object({
+  at: z.iso.datetime(),
+  applicationId: z.string(),
+  title: z.string(),
+  company: z.string(),
+  sent: z.boolean(),
+  /** Why it wasn't sent, in words; empty when it was. */
+  reasons: z.array(z.string()),
+});
+export type AutoApplyEntry = z.infer<typeof autoApplyEntrySchema>;
+/** How many entries are kept for Settings → Job agent. */
+export const AUTO_APPLY_LOG_KEPT = 30;
+
 export const settingsSchema = z.object({
   // AI provider (SET-1). Null means "not set in the app": fall back to the
   // DOSSIER_AI_* environment variables, then to the built-in defaults.
@@ -171,6 +185,17 @@ export const settingsSchema = z.object({
   agentAutoDraft: flag(false),
   /** The latest runs, newest first. They belong to the install: exports leave them out (INSTALL_SETTINGS). */
   agentRuns: json(z.array(agentRunSchema)).catch([]),
+  // Auto-apply (this fork): after the agent drafts an application, send it
+  // through Gmail on its own, when the posting gives an address and the
+  // honesty check (agent/honesty.ts) finds nothing the profile doesn't back.
+  // Off until it's turned on.
+  autoApplyEnabled: flag(false),
+  /** Drafts scored lower than this wait for the user, whatever the agent's own minimum is. */
+  autoApplyMinScore: z.coerce.number().int().min(0).max(100).catch(80),
+  /** The most applications it sends in any 24 hours. */
+  autoApplyDailyCap: z.coerce.number().int().min(1).max(20).catch(3),
+  /** What it sent or kept back, newest first. It belongs to the install: exports leave it out (INSTALL_SETTINGS). */
+  autoApplyLog: json(z.array(autoApplyEntrySchema)).catch([]),
   // Startups (#222): when the screen was last opened, since the daily refresh
   // only runs while it's in use, and what the last refresh found. They belong
   // to the install, not its data, so exports leave them out (INSTALL_SETTINGS).

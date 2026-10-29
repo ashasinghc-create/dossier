@@ -18,6 +18,9 @@ const initial: AgentSettings = {
   maxScores: 15,
   maxDrafts: 3,
   autoDraft: false,
+  autoApply: false,
+  autoApplyMinScore: 80,
+  autoApplyDailyCap: 3,
 };
 const countries = [
   { code: "de", name: "Germany" },
@@ -103,5 +106,40 @@ describe("Settings → Job agent (E16-7)", () => {
     await user.click(screen.getByRole("switch", { name: "Run the job agent" }));
     await waitFor(() => expect(screen.getByRole("switch", { name: "Run the job agent" })).toHaveAttribute("aria-checked", "false"));
     expect(toast).toHaveBeenCalledWith("Type what the agent should look for before turning it on.");
+  });
+
+  it("sends nothing on its own until auto-apply is on, which turns drafts on too (this fork)", async () => {
+    const user = userEvent.setup();
+    open();
+    const toggle = screen.getByRole("switch", { name: "Send applications on their own" });
+    expect(toggle).toHaveAccessibleDescription("Off. Drafts wait on the Agent screen for you to review and send.");
+    expect(screen.getByLabelText("Applications sent per day, at most")).toBeDisabled();
+    await user.click(toggle);
+    expect(saveAgentSettings).toHaveBeenLastCalledWith({ autoApply: true, autoDraft: true });
+    expect(screen.getByRole("switch", { name: "Prepare drafts on its own" })).toHaveAttribute("aria-checked", "true");
+    expect(toggle).toHaveAccessibleDescription(/up to 3 applications a day/);
+    await user.selectOptions(screen.getByLabelText("Applications sent per day, at most"), "5");
+    expect(saveAgentSettings).toHaveBeenLastCalledWith({ autoApplyDailyCap: 5 });
+  });
+
+  it("turns auto-apply off with drafts, and warns while strict mode is off", async () => {
+    const user = userEvent.setup();
+    open({ initial: { ...initial, autoDraft: true, autoApply: true }, strict: false });
+    expect(screen.getByText(/Nothing is sent while/)).toBeInTheDocument();
+    await user.click(screen.getByRole("switch", { name: "Prepare drafts on its own" }));
+    expect(saveAgentSettings).toHaveBeenLastCalledWith({ autoDraft: false, autoApply: false });
+    expect(screen.getByRole("switch", { name: "Send applications on their own" })).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("lists what it sent and what it kept back, with why", () => {
+    open({
+      autoApplyLog: [
+        { at: "2026-10-29T10:00:00.000Z", applicationId: "a1", title: "Analyst", company: "Acme", sent: true, reasons: [] },
+        { at: "2026-10-29T09:00:00.000Z", applicationId: "a2", title: "Designer", company: "Brik", sent: false, reasons: ["The posting doesn't give an email address to apply to: apply on its website."] },
+      ],
+    });
+    expect(screen.getByRole("link", { name: "Analyst, Acme" })).toHaveAttribute("href", "/applications/a1");
+    expect(screen.getByText("Kept for you")).toBeInTheDocument();
+    expect(screen.getByText(/apply on its website/)).toBeInTheDocument();
   });
 });

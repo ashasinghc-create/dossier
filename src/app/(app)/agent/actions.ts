@@ -14,8 +14,9 @@ import { findUnfinishedJobs, startJob } from "@/lib/jobs/runner";
 import { prisma } from "@/lib/prisma";
 import { loadSettings, saveSettings } from "@/lib/settings-data";
 
-// The Agent screen's actions (E16). Nothing here ever sends anything:
-// approving only makes a draft a normal Draft application.
+// The Agent screen's actions (E16). Nothing here sends anything: approving
+// only makes a draft a normal Draft application. Sending on its own is
+// auto-apply's, in lib/agent/auto-apply.ts (this fork).
 
 /**
  * Settings → Job agent (E16-7): each change saves at once. Turning the agent
@@ -30,6 +31,9 @@ export const saveAgentSettings = action(
     maxScores: z.number().int().min(1).max(30).optional(),
     maxDrafts: z.number().int().min(0).max(10).optional(),
     autoDraft: z.boolean().optional(),
+    autoApply: z.boolean().optional(),
+    autoApplyMinScore: z.number().int().min(0).max(100).optional(),
+    autoApplyDailyCap: z.number().int().min(1).max(20).optional(),
   }),
   async (changes) => {
     const settings = await loadSettings();
@@ -44,7 +48,11 @@ export const saveAgentSettings = action(
       agentMinScore: changes.minScore,
       agentMaxScores: changes.maxScores,
       agentMaxDrafts: changes.maxDrafts,
-      agentAutoDraft: changes.autoDraft,
+      // Auto-apply sends what auto-draft prepares, so each needs the other on (this fork).
+      agentAutoDraft: changes.autoApply ? true : changes.autoDraft,
+      autoApplyEnabled: changes.autoDraft === false ? false : changes.autoApply,
+      autoApplyMinScore: changes.autoApplyMinScore,
+      autoApplyDailyCap: changes.autoApplyDailyCap,
     });
     revalidatePath("/agent");
     return null;
